@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnDownloadJpg.addEventListener('click', () => {
 
         html2canvas(exportArea, {
-            scale: 3,
+            scale: 4,
             backgroundColor: "#ffffff"
         }).then(canvas => {
 

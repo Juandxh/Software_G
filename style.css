@@ -159,11 +159,13 @@ select:focus {
     cursor: pointer;
     font-size: 0.9rem;
     transition: 0.2s;
+    flex-wrap: wrap;
 }
 
 .btn-primary {
     background: #2563eb;
     color: white;
+    flex-wrap: wrap;
 }
 
 .btn-primary:hover {
@@ -173,6 +175,7 @@ select:focus {
 .btn-success {
     background: #10b981;
     color: white;
+    flex-wrap: wrap;
 }
 
 .btn-warning {
@@ -490,6 +493,12 @@ select:focus {
         padding: 6px 0;
         border: none;
     }
+
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+    }
+}
 
 
 }
