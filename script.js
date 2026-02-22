@@ -81,7 +81,50 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     
-    btnSaveWorker.addEventListener('click', saveWorker);
+    btnSaveWorker.addEventListener('click', async () => {
+    const id = workerIdInput.value; 
+    const name = nameInput.value.trim();
+    const alias = aliasInput.value.trim();
+    const cedula = cedulaInput.value.trim();
+    const cargo = cargoInput.value.trim();
+
+    if (!name || !alias) {
+        showAlert('Nombre y alias son obligatorios', 'error');
+        return;
+    }
+
+    if (id) {
+        
+        const { error } = await supabaseClient
+            .from('workers')
+            .update({ name, alias, cedula, cargo })
+            .eq('id', id);
+
+        if (error) {
+            console.error(error);
+            showAlert('Error actualizando trabajador', 'error');
+            return;
+        }
+
+        showAlert('Trabajador actualizado', 'success');
+    } else {
+        // Crear nuevo trabajador
+        const { error } = await supabaseClient
+            .from('workers')
+            .insert([{ name, alias, cedula, cargo }]);
+
+        if (error) {
+            console.error(error);
+            showAlert('Error creando trabajador', 'error');
+            return;
+        }
+
+        showAlert('Trabajador agregado', 'success');
+    }
+
+    resetWorkerForm();
+    await loadWorkersFromDB(); // recargar la tabla
+});
     btnCancelEdit.addEventListener('click', cancelEdit);
     searchInput.addEventListener('input', renderWorkers);
 
@@ -163,20 +206,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 }
 
 
-    function editWorker(id) {
-        const w = workers.find(w => w.id === id);
-        if (!w) return;
-        workerIdInput.value = w.id;
-        nameInput.value = w.name;
-        aliasInput.value = w.alias;
-        cedulaInput.value = w.cedula || '';
-        cargoInput.value = w.cargo || '';
+   window.appEditWorker = function(id) {
+    const w = workers.find(w => String(w.id) === String(id));
+    if (!w) return;
 
-        btnSaveWorker.textContent = '💾 Actualizar Personal';
-        btnCancelEdit.classList.remove('hidden');
-        document.querySelector('.tabs .tab[data-tab="personal"]').click();
-        resetWorkerForm(); 
-    }
+    workerIdInput.value = w.id;
+    nameInput.value = w.name;
+    aliasInput.value = w.alias;
+    cedulaInput.value = w.cedula || '';
+    cargoInput.value = w.cargo || '';
+
+    btnSaveWorker.textContent = '💾 Actualizar Personal';
+    btnCancelEdit.classList.remove('hidden');
+
+};
 
     async function deleteWorker(id) {
     if (!confirm('¿Eliminar trabajador?')) return;
@@ -461,7 +504,7 @@ async function addShift() {
             const sStart = timeToMinutes(s.start_time);
             const sEnd = timeToMinutes(s.end_time);
 
-            // Si alguno es TERMINAR, considerar conflicto potencial
+            
             if (sStart === null || sEnd === null || startMin === null || endMin === null) {
                 return true;
             }
@@ -511,7 +554,7 @@ async function addShift() {
 
     if (insertError) {
         console.error(insertError);
-        if (insertError.code === "23505") { // error de unique constraint
+        if (insertError.code === "23505") { 
             showAlert("No se puede agendar: conflicto con turno existente.", "error");
         } else {
             showAlert("Error guardando turno", "error");
@@ -914,7 +957,6 @@ document.addEventListener("click", function(e) {
 
 
 
-    window.appEditWorker = editWorker;
     window.appDeleteWorker = deleteWorker;
     window.deleteShift = deleteShift;
     window.editShift = editShift;
