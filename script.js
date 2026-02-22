@@ -162,7 +162,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function saveWorker() {
     const name = nameInput.value.trim();
-    const alias = aliasInput.value.trim().toUpperCase();
+
+    const alias = aliasInput.value.trim();
     const cedula = cedulaInput.value.trim();
     const cargo = cargoInput.value.trim();
     const id = workerIdInput.value;
@@ -947,10 +948,123 @@ function renderListado() {
 
 });
 
-document.addEventListener("click", function(e) {
-    console.log("click detectado:", e.target);
-});
+document.getElementById('importFile').addEventListener('change', async function (event) {
+    const file = event.target.files[0];
+    if (!file) return;
 
+    const reader = new FileReader();
+
+    for (const date in data.shiftsByDate) {
+    const shiftsOnDate = data.shiftsByDate[date];
+    if (!shiftsOnDate || !Array.isArray(shiftsOnDate)) continue; // 🔹 ignorar null o no-array
+
+    shiftsOnDate.forEach(shift => {
+        if (!shift.workerIds || !Array.isArray(shift.workerIds)) return; // 🔹 ignorar si no hay workerIds
+        shift.workerIds.forEach(oldId => {
+            const worker = data.workers.find(w => w.id === oldId);
+            if (!worker) return;
+            const newWorkerId = aliasToId[worker.alias];
+            if (!newWorkerId) return;
+
+            flatShifts.push({
+                worker_id: newWorkerId,
+                date: date,
+                start_time: shift.start,
+                end_time: shift.end,
+                location: shift.location,
+                activity: shift.activity || '',
+                status: shift.status || 'Programado'
+            });
+        });
+    });
+}
+
+    reader.onload = async function (e) {
+        try {
+            const data = JSON.parse(e.target.result);
+
+            if (!data.workers || !data.shiftsByDate) {
+                alert("El archivo JSON debe contener 'workers' y 'shiftsByDate'");
+                return;
+            }
+
+            const confirmReplace = confirm("⚠️ Esto reemplazará todos los datos actuales. ¿Continuar?");
+            if (!confirmReplace) return;
+
+            // --- Limpiar la base ---
+            await supabaseClient.from('shifts').delete().neq('id', 0);
+            await supabaseClient.from('workers').delete().neq('id', 0);
+
+            // --- Insertar workers sin IDs viejos ---
+            const workersToInsert = data.workers.map(w => {
+                const { id, ...rest } = w; // eliminamos id
+                return rest;
+            });
+
+            const { data: insertedWorkers, error: workersError } = await supabaseClient
+                .from('workers')
+                .insert(workersToInsert);
+
+            if (workersError) throw workersError;
+
+            // --- Crear mapa alias → nuevo id generado ---
+            const aliasToId = {};
+            insertedWorkers.forEach(w => {
+                aliasToId[w.alias] = w.id;
+            });
+
+            // --- Convertir shiftsByDate a array plano usando los nuevos IDs ---
+            const flatShifts = [];
+
+            for (const date in data.shiftsByDate) {
+                const shiftsOnDate = data.shiftsByDate[date];
+                shiftsOnDate.forEach(shift => {
+                    shift.workerIds.forEach(oldId => {
+                        // Encontrar el alias correspondiente al oldId
+                        const worker = data.workers.find(w => w.id === oldId);
+                        if (!worker) return; // omitir si no existe
+                        const newWorkerId = aliasToId[worker.alias];
+                        if (!newWorkerId) return; // omitir si algo falla
+
+                        flatShifts.push({
+                            worker_id: newWorkerId,
+                            date: date,
+                            start_time: shift.start,
+                            end_time: shift.end,
+                            location: shift.location,
+                            activity: shift.activity || '',
+                            status: shift.status || 'Programado'
+                        });
+                    });
+                });
+            }
+
+            if (flatShifts.length === 0) {
+                alert("No se encontraron shifts válidos para importar");
+                return;
+            }
+
+            const { error: shiftsError } = await supabaseClient
+                .from('shifts')
+                .insert(flatShifts);
+
+            if (shiftsError) throw shiftsError;
+
+            alert(`✅ Importación completa: ${insertedWorkers.length} workers y ${flatShifts.length} shifts`);
+
+            // --- Recargar datos ---
+            await loadWorkersFromDB();
+            await loadShiftsFromDB();
+            renderSchedule();
+
+        } catch (err) {
+            console.error(err);
+            alert("Error importando JSON: " + err.message);
+        }
+    };
+
+    reader.readAsText(file);
+});
 
 
     

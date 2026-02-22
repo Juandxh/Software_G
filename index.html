@@ -54,6 +54,14 @@
                         <button class="btn btn-primary" id="btn-save-worker">✅ Guardar Personal</button>
                         <button class="btn btn-warning hidden" id="btn-cancel-edit">Cancelar Edición</button>
                     </div>
+                    <div class="form-card">
+                        <input type="file" id="importWorkersFile" accept=".json" hidden>
+                    <input type="file" id="importFile" accept=".json" hidden>
+                    <button onclick="document.getElementById('importFile').click()">📥 Importar JSON Completo</button>
+                    <div id="import-status">
+
+                    </div>
+                    </div>
                 </div>
 
                 <div class="search-box">
