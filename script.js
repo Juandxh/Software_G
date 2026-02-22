@@ -948,38 +948,13 @@ function renderListado() {
 
 });
 
-document.getElementById('importFile').addEventListener('change', async function (event) {
+document.getElementById('importFile').addEventListener('change', async function(event) {
     const file = event.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
 
-    for (const date in data.shiftsByDate) {
-    const shiftsOnDate = data.shiftsByDate[date];
-    if (!shiftsOnDate || !Array.isArray(shiftsOnDate)) continue; // 🔹 ignorar null o no-array
-
-    shiftsOnDate.forEach(shift => {
-        if (!shift.workerIds || !Array.isArray(shift.workerIds)) return; // 🔹 ignorar si no hay workerIds
-        shift.workerIds.forEach(oldId => {
-            const worker = data.workers.find(w => w.id === oldId);
-            if (!worker) return;
-            const newWorkerId = aliasToId[worker.alias];
-            if (!newWorkerId) return;
-
-            flatShifts.push({
-                worker_id: newWorkerId,
-                date: date,
-                start_time: shift.start,
-                end_time: shift.end,
-                location: shift.location,
-                activity: shift.activity || '',
-                status: shift.status || 'Programado'
-            });
-        });
-    });
-}
-
-    reader.onload = async function (e) {
+    reader.onload = async function(e) {
         try {
             const data = JSON.parse(e.target.result);
 
@@ -1003,7 +978,8 @@ document.getElementById('importFile').addEventListener('change', async function 
 
             const { data: insertedWorkers, error: workersError } = await supabaseClient
                 .from('workers')
-                .insert(workersToInsert);
+                .insert(workersToInsert)
+                .select(); // 🔹 importante usar select() para obtener los nuevos UUID
 
             if (workersError) throw workersError;
 
@@ -1013,19 +989,22 @@ document.getElementById('importFile').addEventListener('change', async function 
                 aliasToId[w.alias] = w.id;
             });
 
-            // --- Convertir shiftsByDate a array plano usando los nuevos IDs ---
+            // --- Convertir shiftsByDate a array plano ---
             const flatShifts = [];
 
             for (const date in data.shiftsByDate) {
                 const shiftsOnDate = data.shiftsByDate[date];
-                shiftsOnDate.forEach(shift => {
-                    shift.workerIds.forEach(oldId => {
-                        // Encontrar el alias correspondiente al oldId
-                        const worker = data.workers.find(w => w.id === oldId);
-                        if (!worker) return; // omitir si no existe
-                        const newWorkerId = aliasToId[worker.alias];
-                        if (!newWorkerId) return; // omitir si algo falla
+                if (!shiftsOnDate || !Array.isArray(shiftsOnDate)) continue;
 
+                shiftsOnDate.forEach(shift => {
+                    if (!shift.workerIds || !Array.isArray(shift.workerIds)) return;
+
+                    shift.workerIds.forEach(oldId => {
+                        const worker = data.workers.find(w => w.id === oldId);
+                        if (!worker) return; // no existe
+                        const newWorkerId = aliasToId[worker.alias];
+                        if (!newWorkerId) return; // fallo en mapeo
+                        
                         flatShifts.push({
                             worker_id: newWorkerId,
                             date: date,
@@ -1052,7 +1031,7 @@ document.getElementById('importFile').addEventListener('change', async function 
 
             alert(`✅ Importación completa: ${insertedWorkers.length} workers y ${flatShifts.length} shifts`);
 
-            // --- Recargar datos ---
+            // --- Recargar datos en UI ---
             await loadWorkersFromDB();
             await loadShiftsFromDB();
             renderSchedule();
