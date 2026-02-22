@@ -395,7 +395,6 @@ async function loadWorkersFromDB() {
         btnCancelEdit.classList.add('hidden');
     }
 async function addShift() {
-
     const selectedChips = document.querySelectorAll('.chip.selected');
     const workerIds = Array.from(selectedChips).map(c => c.dataset.id);
 
@@ -421,6 +420,17 @@ async function addShift() {
         return;
     }
 
+    // Función para convertir hora "HH:MM" a minutos desde medianoche
+    function timeToMinutes(t) {
+        if (t === "TERMINAR") return null;
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    const startMin = timeToMinutes(start);
+    const endMin = timeToMinutes(end);
+
+    // Traer todos los turnos del mismo día
     const { data: existingShifts, error: fetchError } = await supabaseClient
         .from("shifts")
         .select("*")
@@ -434,7 +444,6 @@ async function addShift() {
 
     const isEditing = !!editingShiftId;
 
-    
     let shiftsToCheck = existingShifts;
 
     if (isEditing) {
@@ -446,13 +455,18 @@ async function addShift() {
     const conflicts = [];
 
     workerIds.forEach(wId => {
-
         const conflictShift = shiftsToCheck.find(s => {
-
             if (String(s.worker_id) !== String(wId)) return false;
-            if (end === "TERMINAR" || s.end_time === "TERMINAR") return false;
 
-            return start < s.end_time && end > s.start_time;
+            const sStart = timeToMinutes(s.start_time);
+            const sEnd = timeToMinutes(s.end_time);
+
+            // Si alguno es TERMINAR, considerar conflicto potencial
+            if (sStart === null || sEnd === null || startMin === null || endMin === null) {
+                return true;
+            }
+
+            return startMin < sEnd && endMin > sStart;
         });
 
         if (conflictShift) {
@@ -476,9 +490,7 @@ async function addShift() {
         status: status
     }));
 
-    
     if (isEditing) {
-
         const { error: deleteError } = await supabaseClient
             .from("shifts")
             .delete()
@@ -493,14 +505,17 @@ async function addShift() {
         editingShiftId = null;
     }
 
-    
     const { error: insertError } = await supabaseClient
         .from("shifts")
         .insert(inserts);
 
     if (insertError) {
         console.error(insertError);
-        showAlert("Error guardando turno", "error");
+        if (insertError.code === "23505") { // error de unique constraint
+            showAlert("No se puede agendar: conflicto con turno existente.", "error");
+        } else {
+            showAlert("Error guardando turno", "error");
+        }
         return;
     }
 
@@ -518,7 +533,6 @@ async function addShift() {
     locationInput.value = '';
     selectedChips.forEach(c => c.classList.remove('selected'));
 }
-
 
 
 
