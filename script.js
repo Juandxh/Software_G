@@ -30,11 +30,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const pseudonymSelector = document.getElementById('pseudonym-selector');
     const startTimeInput = document.getElementById('hora-inicio');
     const endTimeInput = document.getElementById('hora-fin');
-    const chkTerminar = document.getElementById('chk-terminar');
+    const chkTerminar = document.getElementById('chk-Terminar');
     const locationInput = document.getElementById('lugar');
     const statusInput = document.getElementById('estado-turno');
     const btnAddShift = document.getElementById('btn-add-shift');
-    const activityInput = document.getElementById('activity');
     const cronogramaContainer = document.getElementById('cronograma-container');
     const alertBox = document.getElementById('alert-box');
 
@@ -64,6 +63,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderWorkers();
     renderSelector();
     renderSchedule();
+    
     
 
     
@@ -431,7 +431,6 @@ async function loadWorkersFromDB() {
     });
 
         ShiftIdInput.value = '';
-        activityInput.value = '';
         locationInput.value = '';
         statusInput.value = '';
         selectedDate.value = '';
@@ -446,10 +445,9 @@ async function addShift() {
     let end = endTimeInput.value;
 
     if (chkTerminar && chkTerminar.checked) {
-        end = "TERMINAR";
+        end = "Terminar";
     }
 
-    const activity = activityInput.value.trim();
     const location = locationInput.value.trim();
     const status = statusInput.value;
     const date = selectedDate;
@@ -466,7 +464,7 @@ async function addShift() {
 
     // Función para convertir hora "HH:MM" a minutos desde medianoche
     function timeToMinutes(t) {
-        if (t === "TERMINAR") return null;
+        if (t === "Terminar") return null;
         const [h, m] = t.split(':').map(Number);
         return h * 60 + m;
     }
@@ -530,7 +528,6 @@ async function addShift() {
         start_time: start,
         end_time: end,
         location: location,
-        activity: activity,
         status: status
     }));
 
@@ -581,7 +578,7 @@ async function addShift() {
 
 
 
-function editShift(workerIds, start, end, location, activity) {
+function editShift(workerIds, start, end, location) {
 
     if (!workerIds) return;
 
@@ -597,19 +594,16 @@ function editShift(workerIds, start, end, location, activity) {
 
     
     startTimeInput.value = start;
-    endTimeInput.value = end === "TERMINAR" ? "" : end;
+    endTimeInput.value = end === "Terminar" ? "" : end;
     locationInput.value = location;
 
-    const activityField = document.getElementById("activity");
-    if (activityField) activityField.value = activity || "";
 
     
     const shiftsToEdit = shifts.filter(s =>
         idsArray.includes(String(s.worker_id)) &&
         s.start_time === start &&
         s.end_time === end &&
-        s.location === location &&
-        (s.activity || "") === (activity || "")
+        s.location === location
     );
 
     
@@ -624,7 +618,7 @@ function editShift(workerIds, start, end, location, activity) {
     btnAddShift.classList.add("btn-warning");
 }
 
-   async function deleteShift(workerIds, start, end, location, activity) {
+    async function deleteShift(workerIds, start, end, location) {
 
     if (!confirm("¿Seguro que deseas eliminar este grupo?")) return;
 
@@ -639,7 +633,7 @@ function editShift(workerIds, start, end, location, activity) {
             .eq("start_time", start)
             .eq("end_time", end)
             .eq("location", location)
-            .eq("activity", activity); 
+            ;
     }
 
     
@@ -667,11 +661,10 @@ function renderSchedule() {
     const grouped = {};
 
     dayShifts.forEach(shift => {
-        const key = `${shift.activity}_${shift.start_time}_${shift.end_time}_${shift.location}`;
+        const key = `${shift.start_time}_${shift.end_time}_${shift.location}`;
 
         if (!grouped[key]) {
             grouped[key] = {
-                activity: shift.activity,
                 start: shift.start_time,
                 end: shift.end_time,
                 location: shift.location,
@@ -703,11 +696,11 @@ function renderSchedule() {
 
             <div class="shift-header">
                 <span class="shift-title">
-                    ${group.activity || 'Sin actividad'} - ${group.location}
+                    ${group.location}
                 </span>
                 <span class="shift-time">
-                    ${group.end === "TERMINAR"
-                        ? `${group.start} - TERMINAR`
+                    ${group.end === "Terminar"
+                        ? `${group.start} - Terminar`
                         : `${group.start} - ${group.end}`}
                 </span>
                 <button class="btn-icon btn-edit"
@@ -715,7 +708,6 @@ function renderSchedule() {
                 data-start="${group.start}"
                 data-end="${group.end}"
                 data-location="${group.location}"
-                data-activity="${group.activity}"
                 data-ids="${group.shiftsIds.join(",")}">
                 ✏️</button>
 
@@ -724,8 +716,7 @@ function renderSchedule() {
                 '${group.workerIds.join(",")}',
                 '${group.start}',
                 '${group.end}',
-                '${group.location}',
-                '${group.activity}'
+                '${group.location}'
                 )">🗑️</button>
 
             </div>
@@ -811,143 +802,143 @@ function renderSchedule() {
 
 
 
-
 function renderListado() {
+    console.log('=== INICIO RENDERIZADO ===');
+    console.log('shifts:', shifts);
+    console.log('selectedDate:', selectedDate);
+    console.log('workers:', workers);
+    console.log('listadoPreview:', listadoPreview);
+    
+    if (!listadoPreview) {
+        console.error('❌ Error: listadoPreview no existe en el DOM');
+        return;
+    }
 
-    const dayShifts = shifts.filter(s =>
-        s.date && s.date.startsWith(selectedDate)
-    );
+    // 1️⃣ shifts YA ES UN ARRAY, no necesitas convertirlo de objeto
+    // Solo filtrar los turnos del día seleccionado
+    const dayShifts = shifts.filter(s => {
+        // Asegurar que la fecha existe y comparar correctamente
+        const shiftDate = s.date ? s.date.split('T')[0] : null;
+        return shiftDate === selectedDate;
+    });
+    
+    console.log('dayShifts filtrados:', dayShifts);
 
+    // 2️⃣ Contar total de personal programado (IDs únicos)
     const personalProgramado = new Set(
-        dayShifts.map(s => String(s.worker_id))
+        dayShifts.map(s => s.worker_id) // worker_id, no workerIds
     ).size;
 
+    // 3️⃣ Limpiar contenido previo
     currentReportText = "";
     listadoPreview.innerHTML = "";
 
     if (dayShifts.length === 0) {
-        listadoPreview.innerHTML = "<p>No hay datos para esta fecha.</p>";
+        listadoPreview.innerHTML = `<div class="no-data-message">
+            <p>No hay datos programados para la fecha: ${selectedDate}</p>
+        </div>`;
+        console.log('No hay datos para la fecha:', selectedDate);
         return;
     }
 
-    
+    // 4️⃣ Agrupar por start_time|end_time|location
     const grouped = {};
-
+    
     dayShifts.forEach(shift => {
-
-        const key = `${shift.start_time}|${shift.end_time}|${shift.location}|${shift.activity}`;
-
+        // Usar los nombres correctos de campos: start_time, end_time, location
+        const key = `${shift.start_time}|${shift.end_time}|${shift.location}`;
+        
         if (!grouped[key]) {
             grouped[key] = {
-                start: shift.start_time,
-                end: shift.end_time,
-                location: shift.location,
-                activity: shift.activity,
+                start: shift.start_time || "",
+                end: shift.end_time || "",
+                location: shift.location || "",
                 workers: []
             };
         }
 
-        const w = workers.find(x => String(x.id) === String(shift.worker_id));
-        if (w) {
-            grouped[key].workers.push(w.alias);
+        // Buscar el alias del trabajador usando worker_id
+        const worker = workers.find(w => String(w.id) === String(shift.worker_id));
+        if (worker) {
+            grouped[key].workers.push(worker.alias);
+        } else {
+            console.warn(`Trabajador con ID ${shift.worker_id} no encontrado`);
         }
     });
 
-    let groupedArray = Object.values(grouped);
+    const groupedArray = Object.values(grouped);
+    console.log('Datos agrupados:', groupedArray);
 
-    
+    // 5️⃣ Ordenar por ubicación y luego por hora
     groupedArray.sort((a, b) => {
-
-        const locCompare = a.location.localeCompare(b.location);
+        const locCompare = (a.location || "").localeCompare(b.location || "");
         if (locCompare !== 0) return locCompare;
-
-        const actCompare = (a.activity || "").localeCompare(b.activity || "");
-        if (actCompare !== 0) return actCompare;
-
-        return a.start.localeCompare(b.start);
+        return (a.start || "").localeCompare(b.start || "");
     });
 
+    
     let htmlMap = `
-        <div class="report-header">
-            <h2 class="titulo-listado">
-                CRONOGRAMA - ${selectedDate} | 
-                Total Personal Programado: ${personalProgramado}
+        <div class="report-header" style="margin-bottom: 20px;">
+            <h2 class="titulo-listado" style="color: #000000; font-size: 1.5rem; text-align: center; margin-bottom: 5px;">
+                 CRONOGRAMA - ${selectedDate} |  Total Personal: ${personalProgramado}
             </h2>
         </div>
-        <table class="report-table">
+        <table class="report-table" style="width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <thead>
-                <tr>
-                    <th>PERSONAL</th>
-                    <th>HORARIO</th>
-                    <th>UBICACIÓN</th>
-                    <th>ACTIVIDAD</th>
+                <tr style="background-color: #ffffff; color: black;">
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">PERSONAL</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">HORARIO</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">UBICACIÓN</th>
                 </tr>
             </thead>
             <tbody>
     `;
 
-    currentReportText += `CRONOGRAMA: ${selectedDate}\n`;
+    currentReportText = `CRONOGRAMA: ${selectedDate}\n`;
     currentReportText += `============================================================\n`;
 
     groupedArray.forEach(group => {
-
-        const personalOrdenado = group.workers.sort().join(", ");
-
+        
+        const personalOrdenado = group.workers.length > 0 
+            ? group.workers.sort().join(", ") 
+            : "Sin personal asignado";
+        
+        
+    groupedArray.sort((a, b) => {
+        return (a.location || "").localeCompare(b.location || "");
+    });
+        
+        // Formatear horario especial para "Terminar"
+        const horario = group.end === "Terminar" 
+            ? `${group.start} - Terminar`
+            : `${group.start || '--:--'} - ${group.end || '--:--'}`;
+        
         htmlMap += `
-            <tr>
-                <td>${personalOrdenado}</td>
-                <td>${group.start} - ${group.end}</td>
-                <td>${group.location}</td>
-                <td>${group.activity || '-'}</td>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px; border: 1px solid #ddd; vertical-align: top;">
+                    ${personalOrdenado}
+                </td>
+                <td style="padding: 10px; border: 1px solid #ddd; white-space: nowrap;">
+                    ${horario}
+                </td>
+                <td style="padding: 10px; border: 1px solid #ddd;">
+                    ${group.location || 'No especificada'}
+                </td>
             </tr>
         `;
-
-        currentReportText += `${personalOrdenado} | ${group.start}-${group.end} | ${group.location} | ${group.activity || '-'}\n`;
+        
+        currentReportText += `${personalOrdenado} | ${horario} | ${group.location || '-'}\n`;
     });
 
     htmlMap += `</tbody></table>`;
 
+
+    console.log('HTML generado, asignando...');
     listadoPreview.innerHTML = htmlMap;
+    
     window.currentListadoText = currentReportText;
+    console.log('=== FIN RENDERIZADO ===');
 }
-
-
-    function showAlert(msg, type) {
-        alertBox.textContent = msg;
-        alertBox.className = `alert alert-${type}`;
-        alertBox.classList.remove('hidden');
-        setTimeout(() => alertBox.classList.add('hidden'), 5000);
-    }
-
-    document.addEventListener("click", function(e) {
-
-    if (e.target.classList.contains("btn-edit")) {
-        const btn = e.target;
-
-        editShift(
-            btn.dataset.workerids,
-            btn.dataset.start,
-            btn.dataset.end,
-            btn.dataset.location,
-            btn.dataset.activity,
-            btn.dataset.id
-        );
-    }
-
-    if (e.target.classList.contains("btn-delete")) {
-        const btn = e.target;
-
-        deleteShift(
-            btn.dataset.workerids,
-            btn.dataset.start,
-            btn.dataset.end,
-            btn.dataset.location,
-            btn.dataset.activity
-        );
-    }
-
-});
-
 document.getElementById('importFile').addEventListener('change', async function(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1011,7 +1002,6 @@ document.getElementById('importFile').addEventListener('change', async function(
                             start_time: shift.start,
                             end_time: shift.end,
                             location: shift.location,
-                            activity: shift.activity || '',
                             status: shift.status || 'Programado'
                         });
                     });
@@ -1031,7 +1021,7 @@ document.getElementById('importFile').addEventListener('change', async function(
 
             alert(`✅ Importación completa: ${insertedWorkers.length} workers y ${flatShifts.length} shifts`);
 
-            // --- Recargar datos en UI ---
+            
             await loadWorkersFromDB();
             await loadShiftsFromDB();
             renderSchedule();
