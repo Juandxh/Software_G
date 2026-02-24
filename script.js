@@ -1,12 +1,14 @@
 const SUPABASE_URL = "https://jrgiagkzsyhhseyedfqc.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyZ2lhZ2t6c3loaHNleWVkZnFjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1MTQwNTYsImV4cCI6MjA4NzA5MDA1Nn0.v57gDJFOkWRUfwbmDkU0ekEktrNeUOWBK75udvY9nqg";
+let workers = [];
+let shifts = [];
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 document.addEventListener('DOMContentLoaded', async () => {
 
 
-    loadWorkersFromDB();
+    
     
     const tabs = document.querySelectorAll('.tab');
     const tabContents = document.querySelectorAll('.tab-content');
@@ -34,6 +36,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const locationInput = document.getElementById('lugar');
     const statusInput = document.getElementById('estado-turno');
     const btnAddShift = document.getElementById('btn-add-shift');
+
     const cronogramaContainer = document.getElementById('cronograma-container');
     const alertBox = document.getElementById('alert-box');
 
@@ -45,13 +48,32 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 
     
-    let workers = [];
-    let shifts = [];
-    let currentReportText = "";
     
+    let currentReportText = "";
+    loadWorkersFromDB();
 
     
    
+    // Función para mostrar alertas
+function showAlert(message, type = 'info') {
+    console.log(`Alert (${type}):`, message);
+    
+    // Si existe un elemento para alertas, usarlo
+    if (alertBox) {
+        alertBox.textContent = message;
+        alertBox.className = `alert alert-${type}`;
+        alertBox.style.display = 'block';
+        
+        // Ocultar después de 3 segundos
+        setTimeout(() => {
+            alertBox.style.display = 'none';
+        }, 3000);
+    } else {
+        // Fallback a alert nativo
+        alert(message);
+    }
+}
+
     let selectedDate = new Date().toISOString().split('T')[0];
     dateInput.value = selectedDate;
 
@@ -65,7 +87,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderSchedule();
     
     
+    document.addEventListener("click", function (e) {
 
+    if (e.target.classList.contains("btn-edit")) {
+
+        const button = e.target;
+
+        const shiftIds = button.dataset.ids
+            .split(",")
+            .map(id => parseInt(id));
+
+        const workerIds = button.dataset.workerids;
+        const start = button.dataset.start;
+        const end = button.dataset.end;
+        const location = button.dataset.location;
+
+        editShift(shiftIds, workerIds, start, end, location);
+    }
+});
     
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -82,48 +121,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     
     btnSaveWorker.addEventListener('click', async () => {
-    const id = workerIdInput.value; 
-    const name = nameInput.value.trim();
-    const alias = aliasInput.value.trim();
-    const cedula = cedulaInput.value.trim();
-    const cargo = cargoInput.value.trim();
-
-    if (!name || !alias) {
-        showAlert('Nombre y alias son obligatorios', 'error');
-        return;
-    }
-
-    if (id) {
-        
-        const { error } = await supabaseClient
-            .from('workers')
-            .update({ name, alias, cedula, cargo })
-            .eq('id', id);
-
-        if (error) {
-            console.error(error);
-            showAlert('Error actualizando trabajador', 'error');
-            return;
-        }
-
-        showAlert('Trabajador actualizado', 'success');
-    } else {
-        // Crear nuevo trabajador
-        const { error } = await supabaseClient
-            .from('workers')
-            .insert([{ name, alias, cedula, cargo }]);
-
-        if (error) {
-            console.error(error);
-            showAlert('Error creando trabajador', 'error');
-            return;
-        }
-
-        showAlert('Trabajador agregado', 'success');
-    }
-
-    resetWorkerForm();
-    await loadWorkersFromDB(); // recargar la tabla
+        await saveWorker();
 });
     btnCancelEdit.addEventListener('click', cancelEdit);
     searchInput.addEventListener('input', renderWorkers);
@@ -160,6 +158,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 }
 
+
     async function saveWorker() {
     const name = nameInput.value.trim();
 
@@ -173,14 +172,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-
+    console.log("ID en saveworker", id);
 
     if (id) {
         
-        const { error } = await supabaseClient
+        const { data: testData , error} = await supabaseClient
             .from("workers")
-            .update({ name, alias, cedula, cargo })
-            .eq("id", id);
+            .update({ 
+                name: name, 
+                alias: alias,
+                cedula: cedula,
+                cargo: cargo })
+            .eq("id", workerIdInput.value.trim())
+            console.log('Test actualización:', { testData });
+
+            
 
         if (error) {
             alert("Error actualizando trabajador");
@@ -434,7 +440,7 @@ async function loadWorkersFromDB() {
         locationInput.value = '';
         statusInput.value = '';
         selectedDate.value = '';
-        btnSaveShift.textContent = '✅ Guardar turno';
+        btnAddShift.textContent = '✅ Guardar turno';
         btnCancelEdit.classList.add('hidden');
     }
 async function addShift() {
@@ -462,7 +468,7 @@ async function addShift() {
         return;
     }
 
-    // Función para convertir hora "HH:MM" a minutos desde medianoche
+    
     function timeToMinutes(t) {
         if (t === "Terminar") return null;
         const [h, m] = t.split(':').map(Number);
@@ -472,7 +478,7 @@ async function addShift() {
     const startMin = timeToMinutes(start);
     const endMin = timeToMinutes(end);
 
-    // Traer todos los turnos del mismo día
+    
     const { data: existingShifts, error: fetchError } = await supabaseClient
         .from("shifts")
         .select("*")
@@ -578,13 +584,14 @@ async function addShift() {
 
 
 
-function editShift(workerIds, start, end, location) {
+function editShift(shiftIds, workerIds, start, end, location) {
 
-    if (!workerIds) return;
+    console.log('editShift llamado con:', { shiftIds, workerIds, start, end, location });
+
+    if (!workerIds || !shiftIds?.length) return;
 
     const idsArray = workerIds.split(",");
 
-    
     document.querySelectorAll('.chip').forEach(chip => {
         chip.classList.toggle(
             'selected',
@@ -592,31 +599,23 @@ function editShift(workerIds, start, end, location) {
         );
     });
 
-    
     startTimeInput.value = start;
-    endTimeInput.value = end === "Terminar" ? "" : end;
+    endTimeInput.value = end === "TERMINAR" ? "" : end;
     locationInput.value = location;
 
-
-    
-    const shiftsToEdit = shifts.filter(s =>
-        idsArray.includes(String(s.worker_id)) &&
-        s.start_time === start &&
-        s.end_time === end &&
-        s.location === location
-    );
-
-    
+    // 🔥 YA NO FILTRAMOS NADA
     editingShiftId = {
-        shiftIds: shiftsToEdit.map(s => s.id),
+        shiftIds: shiftIds,
         workerIds: idsArray
     };
 
-    
     btnAddShift.textContent = "✏️ Guardar Grupo";
     btnAddShift.classList.remove("btn-primary");
     btnAddShift.classList.add("btn-warning");
 }
+
+
+
 
     async function deleteShift(workerIds, start, end, location) {
 
@@ -709,7 +708,8 @@ function renderSchedule() {
                 data-end="${group.end}"
                 data-location="${group.location}"
                 data-ids="${group.shiftsIds.join(",")}">
-                ✏️</button>
+                ✏️
+                </button>
 
                 <button class="btn-icon text-danger"
                 onclick="deleteShift(
@@ -814,22 +814,21 @@ function renderListado() {
         return;
     }
 
-    // 1️⃣ shifts YA ES UN ARRAY, no necesitas convertirlo de objeto
-    // Solo filtrar los turnos del día seleccionado
+    
     const dayShifts = shifts.filter(s => {
-        // Asegurar que la fecha existe y comparar correctamente
+        
         const shiftDate = s.date ? s.date.split('T')[0] : null;
         return shiftDate === selectedDate;
     });
     
     console.log('dayShifts filtrados:', dayShifts);
 
-    // 2️⃣ Contar total de personal programado (IDs únicos)
+    
     const personalProgramado = new Set(
-        dayShifts.map(s => s.worker_id) // worker_id, no workerIds
+        dayShifts.map(s => s.worker_id) 
     ).size;
 
-    // 3️⃣ Limpiar contenido previo
+    
     currentReportText = "";
     listadoPreview.innerHTML = "";
 
@@ -841,11 +840,11 @@ function renderListado() {
         return;
     }
 
-    // 4️⃣ Agrupar por start_time|end_time|location
+    
     const grouped = {};
     
     dayShifts.forEach(shift => {
-        // Usar los nombres correctos de campos: start_time, end_time, location
+        
         const key = `${shift.start_time}|${shift.end_time}|${shift.location}`;
         
         if (!grouped[key]) {
@@ -857,7 +856,7 @@ function renderListado() {
             };
         }
 
-        // Buscar el alias del trabajador usando worker_id
+        
         const worker = workers.find(w => String(w.id) === String(shift.worker_id));
         if (worker) {
             grouped[key].workers.push(worker.alias);
@@ -869,7 +868,7 @@ function renderListado() {
     const groupedArray = Object.values(grouped);
     console.log('Datos agrupados:', groupedArray);
 
-    // 5️⃣ Ordenar por ubicación y luego por hora
+    
     groupedArray.sort((a, b) => {
         const locCompare = (a.location || "").localeCompare(b.location || "");
         if (locCompare !== 0) return locCompare;
@@ -908,7 +907,7 @@ function renderListado() {
         return (a.location || "").localeCompare(b.location || "");
     });
         
-        // Formatear horario especial para "Terminar"
+        
         const horario = group.end === "Terminar" 
             ? `${group.start} - Terminar`
             : `${group.start || '--:--'} - ${group.end || '--:--'}`;
@@ -957,30 +956,30 @@ document.getElementById('importFile').addEventListener('change', async function(
             const confirmReplace = confirm("⚠️ Esto reemplazará todos los datos actuales. ¿Continuar?");
             if (!confirmReplace) return;
 
-            // --- Limpiar la base ---
+            
             await supabaseClient.from('shifts').delete().neq('id', 0);
             await supabaseClient.from('workers').delete().neq('id', 0);
 
-            // --- Insertar workers sin IDs viejos ---
+            
             const workersToInsert = data.workers.map(w => {
-                const { id, ...rest } = w; // eliminamos id
+                const { id, ...rest } = w; 
                 return rest;
             });
 
             const { data: insertedWorkers, error: workersError } = await supabaseClient
                 .from('workers')
                 .insert(workersToInsert)
-                .select(); // 🔹 importante usar select() para obtener los nuevos UUID
+                .select(); 
 
             if (workersError) throw workersError;
 
-            // --- Crear mapa alias → nuevo id generado ---
+            
             const aliasToId = {};
             insertedWorkers.forEach(w => {
                 aliasToId[w.alias] = w.id;
             });
 
-            // --- Convertir shiftsByDate a array plano ---
+            
             const flatShifts = [];
 
             for (const date in data.shiftsByDate) {
@@ -992,9 +991,9 @@ document.getElementById('importFile').addEventListener('change', async function(
 
                     shift.workerIds.forEach(oldId => {
                         const worker = data.workers.find(w => w.id === oldId);
-                        if (!worker) return; // no existe
+                        if (!worker) return; 
                         const newWorkerId = aliasToId[worker.alias];
-                        if (!newWorkerId) return; // fallo en mapeo
+                        if (!newWorkerId) return; 
                         
                         flatShifts.push({
                             worker_id: newWorkerId,
