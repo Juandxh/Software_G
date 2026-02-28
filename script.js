@@ -499,7 +499,7 @@ async function saveWorker() {
 }
 
 async function handleAddShift() {
-    
+    console.log("➕ Procesando guardado de turno...");
     
     try {
         const selectedChips = document.querySelectorAll('.chip.selected');
@@ -515,6 +515,15 @@ async function handleAddShift() {
             end = "Terminar";
         }
 
+        console.log("📝 Datos del turno:", {
+            workerIds,
+            start,
+            end,
+            location,
+            status,
+            date,
+            isEditing: !!editingShiftId
+        });
 
         if (workerIds.length === 0) {
             showAlert('Debe seleccionar al menos un trabajador.', 'error');
@@ -526,7 +535,9 @@ async function handleAddShift() {
             return;
         }
 
+        console.log("🔍 Verificando si los trabajadores YA ESTÁN ASIGNADOS en esta fecha...");
         
+        // Obtener todos los shifts de la fecha
         const { data: existingShifts, error: fetchError } = await supabaseClient
             .from("shifts")
             .select("*")
@@ -534,6 +545,7 @@ async function handleAddShift() {
 
         if (fetchError) throw fetchError;
 
+        // Si es edición, excluir los turnos que estamos editando
         let shiftsToCheck = existingShifts || [];
         if (editingShiftId) {
             shiftsToCheck = existingShifts.filter(s => 
@@ -541,34 +553,30 @@ async function handleAddShift() {
             );
         }
 
-        const conflicts = [];
-        const startMin = timeToMinutes(start);
-        const endMin = timeToMinutes(end);
-
+        // 🟢 VERIFICAR DUPLICADOS - Misma fecha, mismo trabajador (SIN IMPORTAR HORARIO)
+        const trabajadoresYaAsignados = [];
+        
         workerIds.forEach(wId => {
-            const conflictShift = shiftsToCheck.find(s => {
-                if (String(s.worker_id) !== String(wId)) return false;
-                const sStart = timeToMinutes(s.start_time);
-                const sEnd = timeToMinutes(s.end_time);
-                if (sStart === null || sEnd === null || startMin === null || endMin === null) {
-                    return false;
-                }
-                return startMin < sEnd && endMin > sStart;
-            });
-
-            if (conflictShift) {
+            // Buscar si este trabajador YA TIENE ALGÚN turno en esta fecha
+            const yaTieneTurno = shiftsToCheck.some(s => 
+                String(s.worker_id) === String(wId)
+            );
+            
+            if (yaTieneTurno) {
                 const w = workers.find(x => String(x.id) === String(wId));
-                conflicts.push(`${w?.alias || 'Unknown'} (en ${conflictShift.location})`);
+                trabajadoresYaAsignados.push(w?.alias || 'Unknown');
             }
         });
 
-        if (conflicts.length > 0) {
-            showAlert(`⛔ CRUCE DETECTADO: ${conflicts.join(', ')}`, 'error');
+        // Si hay trabajadores que ya tienen turno, NO PERMITIR
+        if (trabajadoresYaAsignados.length > 0) {
+            showAlert(`⛔ NO SE PUEDE AGENDAR: ${trabajadoresYaAsignados.join(', ')} YA TIENE/N UN TURNO ASIGNADO EN ESTA FECHA`, 'error');
             return;
         }
 
-        
+        console.log("✅ Validación pasada, nadie tiene turno en esta fecha, procediendo a guardar...");
 
+        // Preparar datos para insertar
         const inserts = workerIds.map(wId => ({
             date: date,
             worker_id: wId,
@@ -578,7 +586,9 @@ async function handleAddShift() {
             status: status || 'Programado'
         }));
 
+        // Si es edición, eliminar turnos anteriores
         if (editingShiftId) {
+            console.log("✏️ Modo edición - eliminando turnos anteriores:", editingShiftId.shiftIds);
             
             const { error: deleteError } = await supabaseClient
                 .from("shifts")
@@ -587,6 +597,9 @@ async function handleAddShift() {
 
             if (deleteError) throw deleteError;
         }
+
+        // Insertar nuevos turnos
+        console.log("💾 Insertando nuevos turnos:", inserts.length);
         
         const { error: insertError } = await supabaseClient
             .from("shifts")
@@ -599,17 +612,19 @@ async function handleAddShift() {
             'success'
         );
 
+        console.log("🔄 Recargando datos...");
         await loadAllShiftsFromDB();
         resetShiftForm();
         renderSchedule();
         renderWorkers();
+        
+        console.log("🎉 Proceso completado!");
 
     } catch (error) {
         console.error("❌ Error en handleAddShift:", error);
-        showAlert("Error inesperado al guardar el turno", "error");
+        showAlert("Error inesperado al guardar el turno: " + error.message, "error");
     }
 }
-
 function handleTabClick(e) {
     const tab = e.currentTarget;
     elements.tabs.forEach(t => t.classList.remove('active'));
