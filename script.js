@@ -526,11 +526,6 @@ async function handleAddShift() {
             return;
         }
 
-        if (!start) {
-            showAlert('La hora de inicio es obligatoria.', 'error');
-            return;
-        }
-
         
         const { data: existingShifts, error: fetchError } = await supabaseClient
             .from("shifts")
@@ -556,7 +551,7 @@ async function handleAddShift() {
                 const sStart = timeToMinutes(s.start_time);
                 const sEnd = timeToMinutes(s.end_time);
                 if (sStart === null || sEnd === null || startMin === null || endMin === null) {
-                    return true;
+                    return false;
                 }
                 return startMin < sEnd && endMin > sStart;
             });
@@ -577,8 +572,8 @@ async function handleAddShift() {
         const inserts = workerIds.map(wId => ({
             date: date,
             worker_id: wId,
-            start_time: start,
-            end_time: end,
+            start_time: start || null,
+            end_time: end || null,
             location: location,
             status: status || 'Programado'
         }));
