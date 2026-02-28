@@ -885,20 +885,43 @@ async function deleteShift(workerIds, start, end, location) {
     if (!confirm("¿Seguro que deseas eliminar este grupo?")) return;
 
     const idsArray = workerIds.split(",");
+    console.log("🗑️ Eliminando grupo:", { workerIds, start, end, location, fecha: selectedDate });
 
     try {
+        let deleteCount = 0;
+        
         for (const workerId of idsArray) {
-            const { error } = await supabaseClient
+            // Construir la consulta base
+            let query = supabaseClient
                 .from("shifts")
                 .delete()
                 .eq("worker_id", workerId)
                 .eq("date", selectedDate)
-                .eq("start_time", start)
-                .eq("end_time", end)
                 .eq("location", location);
+            
+            // 🟢 Manejar start_time (puede ser null o vacío)
+            if (start && start !== 'null' && start !== 'undefined' && start.trim() !== '') {
+                query = query.eq("start_time", start);
+            } else {
+                query = query.is("start_time", null);
+            }
+            
+            // 🟢 Manejar end_time (puede ser null, vacío o "Terminar")
+            if (end === "Terminar") {
+                query = query.eq("end_time", "Terminar");
+            } else if (end && end !== 'null' && end !== 'undefined' && end.trim() !== '') {
+                query = query.eq("end_time", end);
+            } else {
+                query = query.is("end_time", null);
+            }
+            
+            const { error } = await query;
 
             if (error) throw error;
+            deleteCount++;
         }
+
+        console.log(`✅ ${deleteCount} turnos eliminados`);
         
         await loadAllShiftsFromDB();
         renderSchedule();
@@ -906,45 +929,62 @@ async function deleteShift(workerIds, start, end, location) {
         showAlert("✅ Grupo eliminado correctamente", "success");
         
     } catch (error) {
-        console.error("Error eliminando shift:", error);
-        showAlert("Error al eliminar el grupo", "error");
+        console.error("❌ Error eliminando shift:", error);
+        showAlert("Error al eliminar el grupo: " + error.message, "error");
     }
 }
 
 function editShift(shiftIds, workerIds, start, end, location) {
+    console.log('editShift llamado con:', { shiftIds, workerIds, start, end, location });
 
     if (!workerIds || !shiftIds?.length) return;
 
     const idsArray = workerIds.split(",");
 
+
     document.querySelectorAll('.chip').forEach(chip => {
         chip.classList.toggle('selected', idsArray.includes(chip.dataset.id));
     });
 
-    elements.startTimeInput.value = start;
+
+    if (start && start !== 'null' && start !== 'undefined' && start.trim() !== '') {
+        elements.startTimeInput.value = start;
+    } else {
+        elements.startTimeInput.value = '';
+    }
     
+
     if (end === "Terminar") {
         elements.endTimeInput.value = '';
         elements.chkTerminar.checked = true;
         elements.endTimeInput.disabled = true;
-    } else {
+    } else if (end && end !== 'null' && end !== 'undefined' && end.trim() !== '') {
         elements.endTimeInput.value = end;
+        elements.chkTerminar.checked = false;
+        elements.endTimeInput.disabled = false;
+    } else {
+
+        elements.endTimeInput.value = '';
         elements.chkTerminar.checked = false;
         elements.endTimeInput.disabled = false;
     }
     
-    elements.locationInput.value = location;
+
+    elements.locationInput.value = location || '';
+
 
     editingShiftId = {
         shiftIds: shiftIds,
         workerIds: idsArray
     };
 
+
     elements.btnAddShift.textContent = "✏️ Guardar Grupo";
     elements.btnAddShift.classList.remove("btn-primary");
     elements.btnAddShift.classList.add("btn-warning");
+    
+    elements.btnAddShift.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-
 
 
 function getDOMElements() {
