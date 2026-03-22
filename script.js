@@ -625,6 +625,126 @@ async function handleAddShift() {
         showAlert("Error inesperado al guardar el turno: " + error.message, "error");
     }
 }
+
+// NUEVA FUNCIÓN: Cargar turnos del día anterior
+async function loadPreviousDayShift() {
+    try {
+        showAlert('🔄 Cargando turno del día anterior...', 'info');
+        
+        // Calcular la fecha anterior
+        const previousDate = new Date(selectedDate);
+        previousDate.setDate(previousDate.getDate() - 1);
+        const previousDateStr = previousDate.toISOString().split('T')[0];
+        
+        console.log(`📅 Buscando turnos del día: ${previousDateStr} para copiar a: ${selectedDate}`);
+        
+        // Obtener todos los shifts de la fecha anterior
+        const { data: previousShifts, error: fetchError } = await supabaseClient
+            .from("shifts")
+            .select("*")
+            .eq("date", previousDateStr);
+        
+        if (fetchError) throw fetchError;
+        
+        if (!previousShifts || previousShifts.length === 0) {
+            showAlert(`⚠️ No hay turnos registrados para el día: ${previousDateStr}`, 'warning');
+            return;
+        }
+        
+        console.log(`✅ Encontrados ${previousShifts.length} turnos en ${previousDateStr}`);
+        
+        // Verificar si ya hay turnos para la fecha actual
+        const { data: currentShifts, error: currentError } = await supabaseClient
+            .from("shifts")
+            .select("*")
+            .eq("date", selectedDate);
+        
+        if (currentError) throw currentError;
+        
+        // Si ya hay turnos en la fecha actual, preguntar si se desea sobrescribir
+        if (currentShifts && currentShifts.length > 0) {
+            const confirmOverwrite = confirm(
+                `⚠️ Ya existen ${currentShifts.length} turno(s) para el día ${selectedDate}.\n\n` +
+                `¿Deseas reemplazarlos con los turnos del día ${previousDateStr}?\n\n` +
+                `Esto ELIMINARÁ los turnos actuales y los reemplazará con los del día anterior.`
+            );
+            
+            if (!confirmOverwrite) {
+                showAlert('Operación cancelada', 'info');
+                return;
+            }
+            
+            // Eliminar los turnos actuales
+            console.log(`🗑️ Eliminando ${currentShifts.length} turnos existentes en ${selectedDate}`);
+            const { error: deleteError } = await supabaseClient
+                .from("shifts")
+                .delete()
+                .eq("date", selectedDate);
+            
+            if (deleteError) throw deleteError;
+        }
+        
+        // Agrupar los turnos por grupo (mismo horario y ubicación) para mantener estructura
+        const groupedShifts = {};
+        previousShifts.forEach(shift => {
+            const key = `${shift.start_time || 'null'}_${shift.end_time || 'null'}_${shift.location}`;
+            if (!groupedShifts[key]) {
+                groupedShifts[key] = {
+                    start_time: shift.start_time,
+                    end_time: shift.end_time,
+                    location: shift.location,
+                    status: shift.status,
+                    worker_ids: []
+                };
+            }
+            groupedShifts[key].worker_ids.push(shift.worker_id);
+        });
+        
+        // Preparar los nuevos turnos para la fecha actual
+        const newShifts = [];
+        Object.values(groupedShifts).forEach(group => {
+            group.worker_ids.forEach(workerId => {
+                newShifts.push({
+                    date: selectedDate,
+                    worker_id: workerId,
+                    start_time: group.start_time,
+                    end_time: group.end_time,
+                    location: group.location,
+                    status: group.status || 'Programado'
+                });
+            });
+        });
+        
+        // Insertar los nuevos turnos
+        if (newShifts.length > 0) {
+            console.log(`💾 Insertando ${newShifts.length} nuevos turnos en ${selectedDate}`);
+            
+            const { error: insertError } = await supabaseClient
+                .from("shifts")
+                .insert(newShifts);
+            
+            if (insertError) throw insertError;
+            
+            showAlert(
+                `✅ Éxito! Se cargaron ${newShifts.length} turno(s) desde ${previousDateStr} a ${selectedDate}`,
+                'success'
+            );
+            
+            // Recargar y actualizar la interfaz
+            await loadAllShiftsFromDB();
+            renderSchedule();
+            renderWorkers();
+            renderListado();
+            
+            console.log('🎉 Proceso completado exitosamente');
+        }
+        
+    } catch (error) {
+        console.error("❌ Error cargando turno del día anterior:", error);
+        showAlert("Error al cargar el turno del día anterior: " + error.message, "error");
+    }
+}
+
 function handleTabClick(e) {
     const tab = e.currentTarget;
     elements.tabs.forEach(t => t.classList.remove('active'));
@@ -1088,6 +1208,15 @@ function setupEventListeners() {
         elements.importFile.addEventListener('change', handleImport);
     }
 
+    // NUEVO: Event listener para el botón de cargar día anterior
+    const btnCopyYesterday = document.getElementById('btn-copy-yesterday');
+    if (btnCopyYesterday) {
+        btnCopyYesterday.addEventListener('click', loadPreviousDayShift);
+        console.log('✅ Botón "Cargar día anterior" configurado');
+    } else {
+        console.warn('⚠️ No se encontró el botón con id "btn-copy-yesterday"');
+    }
+
     document.addEventListener('click', handleChipClick);
     document.addEventListener('click', handleEditButtonClick);
 
@@ -1134,4 +1263,3 @@ if (document.readyState === 'loading') {
 } else {
     initApp();
 }
-

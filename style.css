@@ -177,6 +177,11 @@ select:focus {
     color: white;
     flex-wrap: wrap;
 }
+.btn-success:hover {
+    background: #064e37;
+    color: white;
+    flex-wrap: wrap;
+}
 
 .btn-warning {
     background: #f59e0b;
