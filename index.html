@@ -26,7 +26,6 @@
             <div class="panel-section">
                 <h2 class="section-title">Base de Datos del Personal</h2>
 
-
                 <div class="form-card">
                     <h3>➕ Agregar / Editar Personal</h3>
                     <input type="hidden" id="worker-id"> 
@@ -152,14 +151,16 @@
             <div class="panel-section">
                 <h2 class="section-title"> Listado para WhatsApp / Correo</h2>
 
+                
                 <div class="alert alert-success">
                     ✅ Listo para copiar y pegar.
                 </div>
 
-                <br> 
+                <br>
                 <div class="action-buttons">
-                    <button class="btn btn-success" id="btn-copy-yesterday">Copiar listado de ayer</button>
-                </div> 
+                        <button id="btn-copy-yesterday" class="btn btn-primary">Copiar turnos a la fecha actual </button>
+                    <button id="btn-delete-all-shifts" class="btn btn-danger"> Eliminar todos los turnos </button>
+                    </div> 
                 <br>
                 <div class="action-buttons">
                     <button class="btn btn-success" id="btn-copy">📋 Copiar al Portapapeles</button>

@@ -192,6 +192,10 @@ select:focus {
     background: #ef4444;
     color: white;
 }
+.btn-danger:hover {
+    background: #740f0f;
+    color: white;
+}
 
 .btn:active {
     transform: scale(0.97);
